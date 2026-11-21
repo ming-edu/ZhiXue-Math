@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>智学数学 · 个性化学情诊断</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+{% include '_sprite.html' %}
+<div class="topbar">
+  <div class="logo"><span class="logo-mark"><svg class="icon"><use href="#i-logo"/></svg></span>智学数学</div>
+  <nav>
+    <a href="/" class="active"><svg class="icon"><use href="#i-home"/></svg>概览</a>
+    <a href="/teacher/classes"><svg class="icon"><use href="#i-users"/></svg>班级管理</a>
+    <a href="/teacher/create"><svg class="icon"><use href="#i-clipboard"/></svg>布置作业</a>
+    <a href="/teacher/review"><svg class="icon"><use href="#i-check-circle"/></svg>批改中心</a>
+    <a href="/student"><svg class="icon"><use href="#i-graduation"/></svg>学生端</a>
+  </nav>
+</div>
+
+<div class="container">
+  <section class="hero">
+    <div class="eyebrow"><svg class="icon"><use href="#i-sparkles"/></svg>AI 驱动 · 精准学情诊断</div>
+    <h1>从一道错题，看见能力的短板</h1>
+    <p>拍照批改 → 错题解析 → 素养诊断 → 变式训练 → 专题突破，用数据读懂每一个学生的真实学情。</p>
+    <div class="hero-stats">
+      <div class="hs"><b>36</b><span>知识点</span></div>
+      <div class="hs"><b>11</b><span>核心素养维度</span></div>
+      <div class="hs"><b>2024</b><span>北师大新课标</span></div>
+      <div class="hs"><b>2022</b><span>版课程标准</span></div>
+    </div>
+  </section>
+
+  <!-- 数据状态条 -->
+  <div class="data-status" id="dataStatus">
+    <div class="ds-left">
+      <span class="ds-dot"></span>
+      <span id="dsText">正在加载本地数据…</span>
+    </div>
+    <div class="ds-actions">
+      <a href="/teacher/classes" class="btn btn-sm btn-primary"><svg class="icon"><use href="#i-users"/></svg>管理班级/学生</a>
+      <button class="btn btn-sm" onclick="exportBackup()"><svg class="icon"><use href="#i-download"/></svg>导出数据</button>
+      <button class="btn btn-sm" onclick="document.getElementById('importFile').click()"><svg class="icon"><use href="#i-upload"/></svg>导入数据</button>
+      <input type="file" id="importFile" accept=".json,application/json" style="display:none" onchange="onImportFile(event)">
+      <button class="btn btn-sm" onclick="restoreDemo()"><svg class="icon"><use href="#i-refresh"/></svg>恢复演示数据</button>
+      <button class="btn btn-sm btn-danger" onclick="resetAll()"><svg class="icon"><use href="#i-trash"/></svg>清空重置</button>
+    </div>
+  </div>
+
+  <div class="section-title"><svg class="icon"><use href="#i-school"/></svg>班级列表 <span class="badge" id="classBadge">0 个班</span></div>
+  <div class="class-grid" id="classGrid"></div>
+
+  <div class="info-grid">
+    <div class="info-card">
+      <h3><svg class="icon"><use href="#i-brain"/></svg>系统能做什么</h3>
+      <ul>
+        <li><b>拍照识别批改</b>：作业拍照上传，AI 自动识题解题，整页看图批改</li>
+        <li><b>对错制 / 赋分制</b>：每题可单独设只判对错或打分，分值老师自定</li>
+        <li><b>错题解析</b>：每道错题配错因分析与知识点定位</li>
+        <li><b>个性化变式训练</b>：按薄弱知识点生成新题，答案可隐藏，反复练到会</li>
+        <li><b>大数据学情</b>：聚合学生/班级错题，自动定位薄弱知识点</li>
+        <li><b>素养诊断</b>：由薄弱知识点反查 11 项核心素养，生成雷达图</li>
+        <li><b>专题突破</b>：按知识体系聚类薄弱点，生成针对性课程建议</li>
+      </ul>
+    </div>
+    <div class="info-card">
+      <h3><svg class="icon"><use href="#i-layers"/></svg>知识图谱覆盖</h3>
+      <p>严格按北师大版 2024 新课标五上目录构建，共 <b>36 个知识点</b>，覆盖 11 个单元/板块：</p>
+      <div class="tag-list">
+        <span class="tag">小数的再认识和加减法</span><span class="tag">三角形的再认识</span>
+        <span class="tag">小数乘法</span><span class="tag">用字母表示(一)</span>
+        <span class="tag">多边形的面积</span><span class="tag">图形的位置与运动</span>
+        <span class="tag">倍数与因数</span><span class="tag">可能性</span>
+        <span class="tag">数学好玩</span><span class="tag">综合实践</span>
+      </div>
+      <h3 style="font-size:12.5px;margin-top:14px;display:flex;align-items:center;gap:8px;color:var(--ink-2)"><svg class="icon" style="color:var(--brand-2)"><use href="#i-target"/></svg>课标核心素养映射：</h3>
+      <div class="compet-line">
+        <span>数感</span><span>量感</span><span>符号意识</span><span>运算能力</span><span>几何直观</span>
+        <span>空间观念</span><span>推理意识</span><span>数据意识</span><span>模型意识</span><span>应用意识</span><span>创新意识</span>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- 导入数据确认弹窗 -->
+<div class="modal-mask" id="importMask" style="display:none">
+  <div class="modal-box" style="width:min(560px,96vw);padding:26px 26px 22px">
+    <div class="modal-head">
+      <h3><svg class="icon"><use href="#i-upload"/></svg>导入数据备份</h3>
+      <button class="modal-close" onclick="closeImport()"><svg class="icon"><use href="#i-x"/></svg></button>
+    </div>
+    <p style="font-size:12.5px;color:var(--muted);margin:16px 0 0">已读取到你选择的备份文件，请确认内容后选择导入方式：</p>
+    <div id="importSummary" class="import-summary"></div>
+    <div class="import-tip"><svg class="icon"><use href="#i-info"/></svg><span>作业照片保存在服务器上，导入后仍可查看（需访问同一个应用网址）。建议先「导出数据」留存当前内容。</span></div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeImport()">取消</button>
+      <button class="btn" onclick="doImport('merge')"><svg class="icon"><use href="#i-plus"/></svg>合并到现有数据</button>
+      <button class="btn btn-primary" onclick="doImport('replace')"><svg class="icon"><use href="#i-refresh"/></svg>覆盖导入</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<script src="/static/store.js"></script>
+<script>
+function toast(m,t){const e=document.getElementById('toast');e.textContent=m;e.className='toast'+(t?' '+t:'');e.style.display='block';setTimeout(()=>e.style.display='none',2600)}
+function renderClasses(){
+  const classes=Store.all('classes');
+  document.getElementById('classBadge').textContent=classes.length+' 个班';
+  const grid=document.getElementById('classGrid');
+  if(!classes.length){
+    grid.innerHTML='<div class="empty"><svg class="icon"><use href="#i-school"/></svg><p>还没有班级，点上方「管理班级/学生」创建一个</p></div>';
+    return;
+  }
+  grid.innerHTML=classes.map(c=>{
+    const cnt=Store.count?Store.where('students',s=>s.class_id===c.id).length:0;
+    return `<a href="/teacher/dashboard/${c.id}" class="class-card">
+      <div class="class-icon"><svg class="icon"><use href="#i-school"/></svg></div>
+      <div class="class-name">${esc(c.name)}</div>
+      <div class="class-meta">${esc(c.grade||'')} · ${esc(c.semester||'')} <span class="dot"></span> ${cnt} 名学生 <span class="dot"></span> 班号 ${esc(c.class_code||'—')}</div>
+      <div class="class-enter">查看学情看板 <svg class="icon"><use href="#i-arrow-right"/></svg></div>
+    </a>`;
+  }).join('');
+}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;')}
+function renderStatus(){
+  const demo=Store.isDemo();
+  const st=Store.getStats();
+  const cls=st.classes||0, stu=st.students||0;
+  document.getElementById('dsText').textContent= cls
+    ? (demo ? '当前为演示数据 · '+cls+' 个班 / '+stu+' 名学生 · 数据只保存在本设备浏览器，与他人互不相见'
+            : '当前数据：'+cls+' 个班 / '+stu+' 名学生 · 已保存在本设备浏览器，可导出备份带到别的设备')
+    : (demo ? '当前为演示数据（引导用）· 数据只保存在这台设备浏览器'
+            : '当前为空数据 · 可创建班级学生，或点「导入数据」从备份恢复');
+  document.getElementById('dataStatus').className='data-status'+(demo?' demo':(cls?'':' empty'));
+}
+function exportBackup(){
+  try{ Store.downloadBackup(); toast('备份已下载到本机，可存到U盘或网盘带到别的设备','ok'); }
+  catch(e){ toast('导出失败：'+e.message,'err'); }
+}
+var pendingImportText=null;
+function onImportFile(e){
+  var f=e.target.files && e.target.files[0];
+  e.target.value='';
+  if(!f) return;
+  var reader=new FileReader();
+  reader.onload=function(ev){
+    var text=String(ev.target.result||'');
+    var s;
+    try{ s=Store.getBackupSummary(text); }
+    catch(err){ toast('导入失败：'+err.message,'err'); return; }
+    pendingImportText=text;
+    var rows=[
+      ['备份来源', s.app==='zhixue-math-backup' ? '智学数学数据备份' : (s.app||'未标记来源（仍将尝试导入）')],
+      ['导出时间', s.exported_at ? new Date(s.exported_at).toLocaleString('zh-CN') : '未记录'],
+      ['班级 / 学生', (s.stats.classes||0)+' 个班 / '+(s.stats.students||0)+' 名学生'],
+      ['作业 / 作答', (s.stats.assignments||0)+' 份作业 / '+(s.stats.submissions||0)+' 条作答'],
+      ['学习记录', (s.stats.learning_records||0)+' 条']
+    ];
+    document.getElementById('importSummary').innerHTML=rows.map(function(r){
+      return '<div class="is-row"><span class="is-k">'+esc(r[0])+'</span><span class="is-v">'+esc(r[1])+'</span></div>';
+    }).join('');
+    document.getElementById('importMask').style.display='flex';
+  };
+  reader.onerror=function(){ toast('读取文件失败','err'); };
+  reader.readAsText(f,'utf-8');
+}
+function closeImport(){
+  document.getElementById('importMask').style.display='none';
+  pendingImportText=null;
+}
+function doImport(mode){
+  if(!pendingImportText) return;
+  if(mode==='replace' && !confirm('覆盖导入会替换本设备上的全部数据（班级/学生/作业/批改记录），确定继续吗？')) return;
+  try{
+    var r=Store.importData(pendingImportText, mode);
+    closeImport();
+    renderClasses(); renderStatus();
+    toast('导入成功（'+(mode==='merge'?'合并':'覆盖')+'）：'+r.stats.classes+' 个班 / '+r.stats.students+' 名学生','ok');
+  }catch(err){ toast('导入失败：'+err.message,'err'); }
+}
+async function resetAll(){
+  if(!confirm('确定清空全部数据吗？班级、学生、作业、批改记录都会被删除，且无法恢复。'))return;
+  Store.resetAll();renderClasses();renderStatus();toast('已清空全部数据，现在是空白起点','ok');
+}
+async function restoreDemo(){
+  if(!confirm('恢复演示数据会覆盖当前所有内容，确定吗？'))return;
+  await Store.restoreDemo();renderClasses();renderStatus();toast('已恢复演示数据','ok');
+}
+(async function(){await Store.init();renderClasses();renderStatus()})();
+</script>
+</body>
+</html>

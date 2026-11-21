@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>学情看板 - 智学数学</title>
+<link rel="stylesheet" href="/static/style.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+{% include '_sprite.html' %}
+<div class="topbar">
+  <div class="logo"><span class="logo-mark"><svg class="icon"><use href="#i-logo"/></svg></span>智学数学</div>
+  <nav>
+    <a href="/"><svg class="icon"><use href="#i-home"/></svg>概览</a>
+    <a href="/teacher/create"><svg class="icon"><use href="#i-clipboard"/></svg>布置作业</a>
+    <a href="/teacher/review"><svg class="icon"><use href="#i-check-circle"/></svg>批改中心</a>
+    <a href="/student"><svg class="icon"><use href="#i-users"/></svg>学生端</a>
+  </nav>
+</div>
+<div class="container">
+  <div class="page-header">
+    <div>
+      <a href="/" class="back-link"><svg class="icon"><use href="#i-chevron"/></svg>返回班级列表</a>
+      <h1 id="clsTitle">学情看板</h1>
+      <p id="clsSub">北师大版2024 · 基于课标核心素养诊断</p>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-outline" onclick="genClassVariants()"><svg class="icon"><use href="#i-sparkles"/></svg>生成班级变式训练</button>
+      <button class="btn" onclick="refreshAll()"><svg class="icon"><use href="#i-refresh"/></svg>刷新数据</button>
+    </div>
+  </div>
+
+  <div class="stat-row" id="statRow"></div>
+
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab(this,'tab-weak')"><svg class="icon"><use href="#i-trending"/></svg>薄弱知识点</div>
+    <div class="tab" onclick="switchTab(this,'tab-comp')"><svg class="icon"><use href="#i-radar"/></svg>核心素养诊断</div>
+    <div class="tab" onclick="switchTab(this,'tab-topics')"><svg class="icon"><use href="#i-target"/></svg>专题突破课程</div>
+    <div class="tab" onclick="switchTab(this,'tab-ranking')"><svg class="icon"><use href="#i-users"/></svg>学生学情</div>
+  </div>
+
+  <div id="tab-weak" class="tab-content active">
+    <div class="panel">
+      <h2><svg class="icon"><use href="#i-trending"/></svg>班级薄弱知识点排行</h2>
+      <p class="panel-sub">按全班级所有作业记录聚合，正确率低于 60% 且作答次数 ≥2 的判为薄弱点。</p>
+      <div id="weakList"></div>
+      <div id="weakTable" style="margin-top:18px"></div>
+    </div>
+  </div>
+
+  <div id="tab-comp" class="tab-content">
+    <div class="two-col">
+      <div class="panel">
+        <h2><svg class="icon"><use href="#i-radar"/></svg>核心素养雷达图</h2>
+        <p class="panel-sub">由薄弱知识点反查映射的素养，得分越低表示该素养越欠缺。</p>
+        <div class="radar-wrap"><canvas id="radarChart"></canvas></div>
+      </div>
+      <div class="panel">
+        <h2><svg class="icon"><use href="#i-brain"/></svg>素养诊断明细</h2>
+        <p class="panel-sub">按水平由低到高排列，重点关注红色项。</p>
+        <div id="compList"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="tab-topics" class="tab-content">
+    <div class="panel">
+      <h2><svg class="icon"><use href="#i-target"/></svg>针对性专题突破课程</h2>
+      <p class="panel-sub">按知识体系领域（数与代数 / 图形与几何 / 统计与概率 / 综合与实践）聚类薄弱点，自动生成专题教学建议。</p>
+      <div id="topicList"></div>
+    </div>
+  </div>
+
+  <div id="tab-ranking" class="tab-content">
+    <div class="panel">
+      <h2><svg class="icon"><use href="#i-users"/></svg>学生学情列表</h2>
+      <p class="panel-sub">点击学生查看个人诊断与变式训练。</p>
+      <div class="table-wrap"><table id="rankTable">
+        <thead><tr><th>排名</th><th>学生</th><th>综合正确率</th><th>已练知识点</th><th>操作</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-mask" id="modal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h2 id="modalTitle">学生诊断</h2>
+      <button class="modal-close" onclick="closeModal()"><svg class="icon"><use href="#i-close"/></svg></button>
+    </div>
+    <div id="modalBody"></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script src="/static/store.js"></script>
+<script src="/static/analyzer.js"></script>
+<script>
+const CID = parseInt(location.pathname.split('/').pop()) || 1;
+let radarChart = null;
+let kgMeta = {};
+
+function switchTab(el, id){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById(id).classList.add('active');
+}
+function toast(msg, type){
+  const t=document.getElementById('toast');t.textContent=msg;
+  t.className='toast'+(type?' '+type:'');t.style.display='block';
+  setTimeout(()=>t.style.display='none',2500);
+}
+function accColor(a){return a<0.6?'var(--red)':a<0.8?'var(--orange)':'var(--green)'}
+
+async function refreshAll(){
+  const cls = Store.get('classes', CID) || {name:'班级',grade:'',semester:''};
+  document.getElementById('clsTitle').textContent = cls.name + ' · 学情看板';
+  document.getElementById('clsSub').textContent = (cls.grade||'')+' '+(cls.semester||'')+' · 北师大版2024 · 基于课标核心素养诊断';
+  const kpData = await Store.loadKG();
+  kpData.knowledge_points.forEach(k=>kgMeta[k.name]=k);
+  const ov = Store.classOverview(CID);
+  const an = {
+    weak_points: Analyzer.weakPoints({class_id:CID}),
+    competency: Analyzer.competencyDiagnosis(Analyzer.weakPoints({class_id:CID})),
+    topics: Analyzer.topicRecommendations({class_id:CID})
+  };
+  document.getElementById('statRow').innerHTML = `
+    <div class="stat-card sc-1"><div class="sc-top"><div class="sc-icon"><svg class="icon"><use href="#i-users"/></svg></div><div class="sc-trend">在册</div></div>
+      <div class="num">${ov.student_count}</div><div class="label">班级学生数</div></div>
+    <div class="stat-card sc-2"><div class="sc-top"><div class="sc-icon"><svg class="icon"><use href="#i-check-circle"/></svg></div><div class="sc-trend">整体</div></div>
+      <div class="num">${(ov.avg_accuracy*100).toFixed(0)}%</div><div class="label">班级整体正确率</div></div>
+    <div class="stat-card sc-3"><div class="sc-top"><div class="sc-icon"><svg class="icon"><use href="#i-layers"/></svg></div><div class="sc-trend">累计</div></div>
+      <div class="num">${ov.total_records}</div><div class="label">作答记录</div></div>
+    <div class="stat-card sc-4"><div class="sc-top"><div class="sc-icon"><svg class="icon"><use href="#i-alert"/></svg></div><div class="sc-trend">需关注</div></div>
+      <div class="num">${an.weak_points.length}</div><div class="label">薄弱知识点</div></div>`;
+
+  const kpMeta = kgMeta;
+  document.getElementById('weakList').innerHTML = an.weak_points.length
+    ? an.weak_points.slice(0,6).map(w=>{
+        const m=kpMeta[w.knowledge_point]||{};
+        return `<div class="point-card">
+          <div class="name">${w.knowledge_point} <span class="pct">${(w.accuracy*100).toFixed(0)}%</span></div>
+          <div class="desc">${m.error_pattern||''} · 作答${w.total}次 · 涉及素养：${(m.competencies||[]).join('、')}</div>
+        </div>`}).join('')
+    : '<div class="empty"><svg class="icon"><use href="#i-check-circle"/></svg><p>暂无薄弱点数据，先布置作业并积累作答记录。</p></div>';
+
+  document.getElementById('weakTable').innerHTML = an.weak_points.length
+    ? `<div class="table-wrap"><table><thead><tr><th>知识点</th><th>作答次数</th><th>正确次数</th><th>正确率</th><th>所属领域</th></tr></thead><tbody>`+
+      an.weak_points.map(w=>`<tr><td><b>${w.knowledge_point}</b></td><td>${w.total}</td><td>${w.correct}</td>
+      <td><div class="acc-bar"><div class="track"><div class="fill" style="width:${w.accuracy*100}%;background:${accColor(w.accuracy)}"></div></div>
+      <span class="${w.accuracy<0.6?'acc-low':'acc-mid'}">${(w.accuracy*100).toFixed(0)}%</span></div></td>
+      <td>${(kpMeta[w.knowledge_point]||{}).domain||''}</td></tr>`).join('')+'</tbody></table></div>' : '';
+
+  window._lastAnalysis = an;
+  renderRadar(an.competency);
+  renderCompList(an.competency);
+  renderTopics(an.topics);
+  renderRanking(ov.ranking);
+}
+
+function renderRadar(data){
+  const canvas=document.getElementById('radarChart');
+  const ctx=canvas.getContext('2d');
+  if(radarChart) radarChart.destroy();
+  canvas.width=460; canvas.height=400;
+  canvas.style.width='460px'; canvas.style.height='400px';
+  radarChart=new Chart(ctx,{
+    type:'radar',
+    data:{
+      labels:data.map(d=>d.competency),
+      datasets:[{label:'素养水平',data:data.map(d=>d.level),
+        backgroundColor:'rgba(124,58,237,.16)',borderColor:'#7c3aed',borderWidth:2,
+        pointBackgroundColor:'#7c3aed',pointBorderColor:'#fff',pointBorderWidth:2,pointRadius:4,
+        pointHoverRadius:6}]
+    },
+    options:{responsive:false,maintainAspectRatio:false,scales:{r:{
+      min:0,max:100,ticks:{stepSize:20,backdropColor:'transparent',color:'#9aa1b5',font:{size:10}},
+      grid:{color:'rgba(20,24,60,.08)'},angleLines:{color:'rgba(20,24,60,.08)'},
+      pointLabels:{font:{size:11.5,family:'Noto Sans SC'},color:'#3f4459'}
+    }},plugins:{legend:{display:false},tooltip:{
+      backgroundColor:'#171a2b',padding:10,titleFont:{size:12},bodyFont:{size:12},
+      callbacks:{label:c=>` 素养水平：${c.raw}`}
+    }}}
+  });
+}
+
+function renderCompList(data){
+  document.getElementById('compList').innerHTML = data.map(d=>{
+    const color=d.level<70?'var(--red)':d.level<85?'var(--orange)':'var(--green)';
+    const tagColor=d.domain==='数学眼光'?'var(--brand-soft)':d.domain==='数学思维'?'var(--green-soft)':'var(--blue-soft)';
+    const tagText=d.domain==='数学眼光'?'var(--primary)':d.domain==='数学思维'?'var(--green)':'var(--blue)';
+    return `<div class="comp-item">
+      <div class="comp-top">
+        <span class="comp-name">${d.competency}<span class="comp-domain" style="background:${tagColor};color:${tagText}">${d.domain}</span></span>
+        <span class="comp-score" style="color:${color}">${d.level}</span>
+      </div>
+      <div class="comp-desc">${d.description}</div>
+      ${d.hits?`<div class="comp-evidence">⚠ 被 ${d.hits} 个薄弱点命中：${d.evidence.map(e=>e.point).join('、')}</div>`:''}
+    </div>`}).join('');
+}
+
+function renderTopics(topics){
+  document.getElementById('topicList').innerHTML = topics.length ? topics.map(t=>`
+    <div class="topic-card">
+      <h3><svg class="icon"><use href="#i-book"/></svg>${t.title}</h3>
+      <div class="meta"><span>薄弱点 <b>${t.weak_count}</b> 个</span><span>平均正确率 <b>${(t.avg_accuracy*100).toFixed(0)}%</b></span><span>涉及素养 <b>${t.competencies.join('、')}</b></span></div>
+      <div class="suggest">${t.suggestion}</div>
+    </div>`).join('') : '<div class="empty"><svg class="icon"><use href="#i-check-circle"/></svg><p>暂无薄弱点，无需专题突破。</p></div>';
+}
+
+function renderRanking(ranking){
+  document.querySelector('#rankTable tbody').innerHTML = ranking.map((s,i)=>`
+    <tr><td>${i+1}</td><td><b>${s.name}</b></td>
+    <td><div class="acc-bar"><div class="track"><div class="fill" style="width:${s.accuracy*100}%;background:${accColor(s.accuracy)}"></div></div>
+    <span>${(s.accuracy*100).toFixed(0)}%</span></div></td>
+    <td>${s.point_count}</td>
+    <td><button class="btn btn-sm btn-outline" onclick="openStudent(${s.id},'${s.name}')"><svg class="icon"><use href="#i-eye"/></svg>查看诊断</button></td></tr>`).join('');
+}
+
+async function openStudent(sid,name){
+  document.getElementById('modalTitle').textContent=name+' · 个人学情诊断';
+  document.getElementById('modal').style.display='flex';
+  document.getElementById('modalBody').innerHTML='<div class="empty"><p>加载中...</p></div>';
+  const weak = Analyzer.weakPoints({student_id:sid});
+  const an = { weak_points: weak, competency: Analyzer.competencyDiagnosis(weak) };
+  const v = Analyzer.generateVariantSet({student_id:sid}, 5);
+  const weakHtml=an.weak_points.length?an.weak_points.map(w=>
+    `<div class="point-card"><div class="name">${w.knowledge_point} <span class="pct">${(w.accuracy*100).toFixed(0)}%</span></div>
+     <div class="desc">作答 ${w.total} 次</div></div>`).join(''):'<div class="empty"><p>暂无明显薄弱点</p></div>';
+  const top3=an.competency.slice(0,3).map(d=>`${d.competency}(${d.level})`).join('、');
+  const exHtml=v.length?v.map((e,i)=>`
+    <div class="exercise-card">
+      <div class="ex-head"><span class="ex-num">变式 ${i+1}</span><span class="ex-kp">${e.knowledge_point}</span></div>
+      <div class="ex-text">${e.question_text}</div>
+      <div class="ex-answer">参考答案：${e.answer}</div>
+      <div class="ex-analysis">${e.analysis}</div>
+    </div>`).join(''):'<div class="empty"><p>暂无变式题</p></div>';
+  document.getElementById('modalBody').innerHTML=`
+    <h3><svg class="icon"><use href="#i-trending"/></svg>薄弱知识点</h3>${weakHtml}
+    <h3><svg class="icon"><use href="#i-brain"/></svg>最需关注的素养：${top3||'无明显短板'}</h3>
+    <h3><svg class="icon"><use href="#i-sparkles"/></svg>个性化变式训练（${v.length} 题）</h3>${exHtml}`;
+}
+function closeModal(){document.getElementById('modal').style.display='none'}
+document.getElementById('modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal()});
+function genClassVariants(){
+  const v=Analyzer.generateVariantSet({class_id:CID}, 5);
+  toast(v.length?`已生成 ${v.length} 道班级变式训练题`:'暂无薄弱点，未生成','ok');
+}
+(async function(){ await Store.init(); await refreshAll(); })();
+</script>
+</body>
+</html>

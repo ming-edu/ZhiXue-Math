@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>布置作业 - 智学数学</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+{% include '_sprite.html' %}
+<div class="topbar">
+  <div class="logo"><span class="logo-mark"><svg class="icon"><use href="#i-logo"/></svg></span>智学数学</div>
+  <nav>
+    <a href="/"><svg class="icon"><use href="#i-home"/></svg>概览</a>
+    <a href="/teacher/create" class="active"><svg class="icon"><use href="#i-clipboard"/></svg>布置作业</a>
+    <a href="/teacher/review"><svg class="icon"><use href="#i-check-circle"/></svg>批改中心</a>
+    <a href="/student"><svg class="icon"><use href="#i-users"/></svg>学生端</a>
+  </nav>
+</div>
+<div class="container">
+  <div class="page-header">
+    <div>
+      <a href="/" class="back-link"><svg class="icon"><use href="#i-chevron"/></svg>返回</a>
+      <h1>布置作业</h1>
+      <p>按三步完成：建作业拍照识题 → 核对题目与答案 → 预览确认布置。</p>
+    </div>
+  </div>
+
+  <!-- 可点击切换的步骤条 -->
+  <div class="steps" id="steps">
+    <button class="step active" id="step1" onclick="gotoStep(1)"><span class="step-num">1</span>建作业 · 拍照识题</button>
+    <button class="step" id="step2" onclick="gotoStep(2)"><span class="step-num">2</span>核对题目与答案</button>
+    <button class="step" id="step3" onclick="gotoStep(3)"><span class="step-num">3</span>完成布置 · 预览</button>
+  </div>
+
+  <!-- ===== 步骤1：建作业 + 拍照识题 ===== -->
+  <div class="step-panel active" id="panel1">
+    <div class="two-col">
+      <div class="panel">
+        <h2><svg class="icon"><use href="#i-camera"/></svg>拍照识题（推荐）</h2>
+        <p class="panel-sub">取好标题、选好班级，把作业题拍下来上传，AI 自动数题并解题。</p>
+        <div class="form-group"><label>作业标题 <span class="req">*</span></label><input id="aTitle" placeholder="如：第五单元三角形面积练习"></div>
+        <div class="form-row form-row-3">
+          <div class="form-group"><label>布置班级</label><select id="aClass"></select></div>
+          <div class="form-group"><label>默认评分模式</label><select id="aDefaultMode" onchange="toggleDefaultMode()">
+            <option value="score">赋分制（打分）</option>
+            <option value="passfail">二元制（正确/错误）</option>
+          </select><div class="form-hint">识别后各题按此模式，第 2 步可逐题改</div></div>
+          <div class="form-group" id="defScoreGroup"><label>每题默认分值 <span class="req">*</span></label><input id="aDefaultScore" type="number" value="10" min="1" placeholder="老师设定，识别后可逐题修改"><div class="form-hint">AI 不出分值，各题以此值填充</div></div>
+        </div>
+        <div class="form-group">
+          <label>作业题照片 <span class="req">*</span></label>
+          <label class="upload-box" for="hwImage">
+            <svg class="icon" style="width:34px;height:34px"><use href="#i-camera"/></svg>
+            <span id="uploadHint">点击选择作业题照片（可拍照）</span>
+          </label>
+          <input type="file" id="hwImage" accept="image/*" style="display:none" capture="environment">
+        </div>
+        <div id="aiPreview" class="ai-preview" style="display:none"><img id="hwThumb" alt="作业题预览"></div>
+        <button class="btn btn-primary" id="parseBtn" onclick="parseHomework()" disabled>
+          <svg class="icon"><use href="#i-sparkles"/></svg>识别题目并自动解题
+        </button>
+        <div id="aiMsg" class="inline-msg"></div>
+
+        <hr class="divider">
+        <details>
+          <summary style="cursor:pointer;color:var(--muted);font-size:14px;font-weight:600">手动添加单题（备用）</summary>
+          <div style="margin-top:14px">
+            <div class="form-group"><label>所属作业</label><select id="qAssignment"></select></div>
+            <div class="form-row">
+              <div class="form-group"><label>题型</label><select id="qType">
+                <option value="choice">选择题</option><option value="fill">填空题</option><option value="calc">计算题</option>
+              </select></div>
+              <div class="form-group"><label>关联知识点</label><select id="qKp"></select></div>
+            </div>
+            <div class="form-group"><label>题目内容</label><textarea id="qText" placeholder="输入题干..."></textarea></div>
+            <div class="form-row">
+              <div class="form-group"><label>标准答案</label><input id="qAnswer" placeholder="如 B 或 48平方厘米"></div>
+              <div class="form-group"><label>分值</label><input id="qScore" type="number" value="10" min="1"></div>
+            </div>
+            <div class="form-group"><label>错题解析</label><textarea id="qAnalysis" placeholder="错误原因和正确解法..."></textarea></div>
+            <button class="btn" onclick="createQuestion()">添加这道题目</button>
+            <div id="qMsg" class="inline-msg"></div>
+          </div>
+        </details>
+      </div>
+
+      <div class="panel">
+        <h2><svg class="icon"><use href="#i-clipboard"/></svg>已布置的作业</h2>
+        <div id="assignList"></div>
+        <hr class="divider">
+        <h2><svg class="icon"><use href="#i-eye"/></svg>题目预览</h2>
+        <div class="form-group"><label>选择作业查看题目</label><select id="previewAssignment" onchange="loadQuestions()"></select></div>
+        <div id="questionList"></div>
+      </div>
+    </div>
+    <div class="wizard-nav"><span></span><button class="btn btn-primary" onclick="gotoStep(2)">下一步：核对题目与答案 <svg class="icon"><use href="#i-chevron"/></svg></button></div>
+  </div>
+
+  <!-- ===== 步骤2：核对题目与答案 + 设置评分模式 ===== -->
+  <div class="step-panel" id="panel2">
+    <div class="panel">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+        <div><h2 style="margin:0"><svg class="icon"><use href="#i-edit"/></svg>核对题目与答案</h2>
+          <p class="panel-sub" style="margin-bottom:0">AI 结果可能有误，请逐题核对；并设定每题的评分方式。<span class="badge-warn">AI 生成的答案需你确认</span></p></div>
+        <div class="batch-bar">
+          <span>批量设：</span>
+          <button class="btn btn-sm" onclick="setAllMode('score')">全部赋分制</button>
+          <button class="btn btn-sm" onclick="setAllMode('passfail')">全部二元制</button>
+        </div>
+      </div>
+      <div id="reviewArea" style="margin-top:18px"></div>
+    </div>
+    <div class="wizard-nav">
+      <button class="btn" onclick="gotoStep(1)"><svg class="icon"><use href="#i-chevron" style="transform:rotate(180deg)"/></svg>上一步</button>
+      <button class="btn btn-primary" onclick="gotoStep(3)">下一步：预览作业 <svg class="icon"><use href="#i-chevron"/></svg></button>
+    </div>
+  </div>
+
+  <!-- ===== 步骤3：预览确认 ===== -->
+  <div class="step-panel" id="panel3">
+    <div class="panel">
+      <h2><svg class="icon"><use href="#i-eye"/></svg>预览作业 · 确认布置</h2>
+      <p class="panel-sub">确认无误后点击「确认布置」，学生端即可看到并作答。</p>
+      <div id="finalPreview"></div>
+    </div>
+    <div class="wizard-nav">
+      <button class="btn" onclick="gotoStep(2)"><svg class="icon"><use href="#i-chevron" style="transform:rotate(180deg)"/></svg>上一步修改</button>
+      <button class="btn btn-primary" onclick="saveQuestions()"><svg class="icon"><use href="#i-check"/></svg>确认布置（<span id="saveCount">0</span>道题）</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<script src="/static/store.js"></script>
+<script>
+let classes=[], kps=[], assignments=[], parsedQuestions=[], createdAid=null, hwFile=null, curStep=1;
+function toast(m,t){const e=document.getElementById('toast');e.textContent=m;e.className='toast'+(t?' '+t:'');e.style.display='block';setTimeout(()=>e.style.display='none',2600)}
+
+function gotoStep(n){
+  // 校验：进第2/3步必须有识别好的题目
+  if(n>1 && !parsedQuestions.length && n===2){toast('请先在第1步拍照识别题目','err');return}
+  curStep=n;
+  for(let i=1;i<=3;i++){
+    document.getElementById('panel'+i).classList.toggle('active',i===n);
+    const s=document.getElementById('step'+i);
+    s.classList.toggle('active',i===n);
+    s.classList.toggle('done',i<n);
+  }
+  if(n===2)renderReview();
+  if(n===3)renderFinalPreview();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function toggleDefaultMode(){
+  const m=document.getElementById('aDefaultMode').value;
+  const grp=document.getElementById('defScoreGroup');
+  const inp=document.getElementById('aDefaultScore');
+  if(m==='passfail'){grp.style.opacity='0.45';inp.disabled=true;}
+  else{grp.style.opacity='1';inp.disabled=false;}
+}
+
+async function init(){
+  await Store.init();
+  const kg=await Store.loadKG();
+  classes=Store.all('classes');
+  kps=kg.knowledge_points;
+  assignments=Store.all('assignments').sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||'')));
+  document.getElementById('aClass').innerHTML=classes.map(c=>`<option value="${c.id}">${c.name}（${c.class_code||''}）</option>`).join('');
+  const opts=assignments.map(a=>`<option value="${a.id}">${a.title}</option>`).join('');
+  document.getElementById('qAssignment').innerHTML=opts;
+  document.getElementById('previewAssignment').innerHTML=opts;
+  document.getElementById('qKp').innerHTML=kps.map(k=>`<option value="${k.name}">${k.unit} · ${k.name}</option>`).join('');
+  document.getElementById('hwImage').onchange=function(e){
+    hwFile=e.target.files[0];
+    if(hwFile){
+      document.getElementById('uploadHint').textContent=hwFile.name;
+      document.getElementById('hwThumb').src=URL.createObjectURL(hwFile);
+      document.getElementById('aiPreview').style.display='block';
+      document.getElementById('parseBtn').disabled=false;
+    }
+  };
+  renderAssignments(); loadQuestions(); toggleDefaultMode();
+}
+function renderAssignments(){
+  document.getElementById('assignList').innerHTML=assignments.length?assignments.map(a=>
+    `<div class="q-card"><div class="q-head"><b>${a.title}</b><span class="q-type">${Store.where('questions',q=>q.assignment_id===a.id).length} 道题</span></div>
+     <div class="q-meta">${a.description||'无说明'} · ${a.created_at?a.created_at.slice(0,10):''}</div></div>`).join('')
+    :'<div class="empty"><svg class="icon"><use href="#i-clipboard"/></svg><p>暂无作业</p></div>';
+}
+
+async function parseHomework(){
+  const title=document.getElementById('aTitle').value.trim();
+  if(!title)return toast('请先填写作业标题','err');
+  const defMode=document.getElementById('aDefaultMode').value;
+  const defScore=parseFloat(document.getElementById('aDefaultScore').value)||10;
+  if(defMode==='score' && defScore<=0)return toast('赋分制下请先设定每题默认分值','err');
+  if(!hwFile)return toast('请先选择作业题照片','err');
+  const btn=document.getElementById('parseBtn');
+  btn.disabled=true; btn.innerHTML='<svg class="icon"><use href="#i-loader"/></svg>AI 正在识别与解题，请稍候（约10-30秒）…';
+  document.getElementById('aiMsg').textContent='';
+  const fd=new FormData(); fd.append('image',hwFile);
+  try{
+    const res=await fetch('/api/ai/parse-homework',{method:'POST',body:fd}).then(r=>r.json());
+    if(res.error)throw new Error(res.error);
+    parsedQuestions=res.questions;
+    // 用老师设定的默认模式与分值填充每题（AI 不出分值和评分模式）
+    parsedQuestions.forEach(q=>{q.score=defScore;q.grading_mode=defMode});
+    const a=Store.insert('assignments',{title,class_id:parseInt(document.getElementById('aClass').value),
+      teacher_id:1,description:'AI拍照识题',created_at:new Date().toISOString()});
+    createdAid=a.id;
+    document.getElementById('aiMsg').innerHTML=`<span style="color:var(--green)">✓ 识别到 ${res.count} 道题，已创建作业「${title}」。点击「下一步」核对。</span>`;
+    toast(`识别成功，共 ${res.count} 道题`,'ok');
+    gotoStep(2);
+  }catch(e){toast('识别失败：'+e.message,'err');document.getElementById('aiMsg').innerHTML=`<span style="color:var(--red)">${e.message}</span>`}
+  finally{btn.disabled=false;btn.innerHTML='<svg class="icon"><use href="#i-sparkles"/></svg>重新识别'}
+}
+
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;')}
+function collectReview(){
+  parsedQuestions.forEach((q,i)=>{
+    const rt=document.getElementById(`rt_${i}`),ra=document.getElementById(`ra_${i}`),rs=document.getElementById(`rs_${i}`),
+          ran=document.getElementById(`ran_${i}`),rk=document.getElementById(`rk_${i}`),rm=document.querySelector(`.review-card[data-i="${i}"] .mode-sel`);
+    if(rt)q.text=rt.value.trim();
+    if(ra)q.answer=ra.value.trim();
+    if(rs)q.score=parseFloat(rs.value)||10;
+    if(ran)q.analysis=ran.value.trim();
+    if(rk)q.knowledge_point=rk.value;
+    if(rm)q.grading_mode=rm.value;
+  });
+}
+function renderReview(){
+  const area=document.getElementById('reviewArea');
+  const kpOpts=kps.map(k=>`<option value="${k.name}">${k.name}</option>`).join('');
+  area.innerHTML=parsedQuestions.map((q,i)=>`
+    <div class="review-card" data-i="${i}">
+      <div class="review-head"><span class="q-num">第 ${i+1} 题</span>
+        <select class="mode-sel" onchange="toggleMode(${i})">
+          <option value="score" ${q.grading_mode!=='passfail'?'selected':''}>赋分制（打分）</option>
+          <option value="passfail" ${q.grading_mode==='passfail'?'selected':''}>二元制（正确/错误）</option>
+        </select>
+        <button class="icon-btn" onclick="removeQ(${i})" title="删除">✕</button>
+      </div>
+      <div class="form-group"><label>题目内容</label><textarea id="rt_${i}" rows="2">${esc(q.text)}</textarea></div>
+      <div class="form-row">
+        <div class="form-group"><label>标准答案（AI 生成，请核对）</label><input id="ra_${i}" value="${esc(q.answer)}"></div>
+        <div class="form-group mode-score"><label>分值</label><input id="rs_${i}" type="number" value="${q.score||10}" min="1"></div>
+      </div>
+      <div class="form-group"><label>解题思路</label><input id="ran_${i}" value="${esc(q.analysis)}"></div>
+      <div class="form-group"><label>知识点</label><select id="rk_${i}">${kpOpts}</select></div>
+    </div>`).join('');
+  parsedQuestions.forEach((q,i)=>{
+    const sel=document.getElementById(`rk_${i}`);
+    const kp=kps.find(k=>k.name===q.knowledge_point);
+    sel.value=kp?kp.name:(kps[0]?.name||'');
+    toggleMode(i);
+  });
+  document.getElementById('saveCount').textContent=parsedQuestions.length;
+}
+function toggleMode(i){
+  const card=document.querySelector(`.review-card[data-i="${i}"]`);
+  if(!card)return;
+  const mode=card.querySelector('.mode-sel').value;
+  card.querySelector('.mode-score').style.opacity=mode==='passfail'?'0.4':'1';
+}
+function setAllMode(mode){
+  parsedQuestions.forEach((q,i)=>{
+    q.grading_mode=mode;
+    const card=document.querySelector(`.review-card[data-i="${i}"]`);
+    if(card){card.querySelector('.mode-sel').value=mode;toggleMode(i)}
+  });
+  toast(mode==='passfail'?'已全部设为二元制':'已全部设为赋分制','ok');
+}
+function removeQ(i){collectReview();parsedQuestions.splice(i,1);renderReview();document.getElementById('saveCount').textContent=parsedQuestions.length}
+
+function renderFinalPreview(){
+  collectReview();
+  const title=document.getElementById('aTitle').value.trim();
+  const cls=classes.find(c=>c.id==parseInt(document.getElementById('aClass').value));
+  const scoreCount=parsedQuestions.filter(q=>q.grading_mode!=='passfail').length;
+  const passCount=parsedQuestions.length-scoreCount;
+  document.getElementById('finalPreview').innerHTML=`
+    <div class="preview-head">
+      <div><div class="preview-title">${esc(title)}</div>
+        <div class="preview-meta">${cls?cls.name:''} · 共 ${parsedQuestions.length} 道题 · 赋分制 ${scoreCount} 题 / 二元制 ${passCount} 题</div></div>
+      <span class="badge-ok">可布置</span>
+    </div>
+    ${parsedQuestions.map((q,i)=>`
+      <div class="preview-q">
+        <div class="pq-top"><span class="ex-num">第 ${i+1} 题</span>
+          <span class="pq-mode ${q.grading_mode==='passfail'?'binary':'scored'}">${q.grading_mode==='passfail'?'二元制 · 正确/错误':'赋分制 · '+q.score+'分'}</span></div>
+        <div class="pq-text">${esc(q.text)}</div>
+        <div class="pq-ans">参考答案：<b>${esc(q.answer)}</b> <span class="pq-kp">${esc(q.knowledge_point)}</span></div>
+      </div>`).join('')}`;
+  document.getElementById('saveCount').textContent=parsedQuestions.length;
+}
+
+async function saveQuestions(){
+  collectReview();
+  if(parsedQuestions.some(x=>!x.text||!x.answer))return toast('有题目缺少内容或答案，请返回补全','err');
+  const items=parsedQuestions.map((q,i)=>({
+    assignment_id:createdAid,q_type:q.q_type||'calc',question_text:q.text,
+    standard_answer:q.answer,analysis:q.analysis||'',knowledge_point:q.knowledge_point,
+    score:q.score||10,sort_order:i,grading_mode:q.grading_mode||'score',source:'ai'
+  }));
+  items.forEach(it=>Store.insert('questions',it));
+  toast(`已保存 ${items.length} 道题`,'ok');
+  assignments=Store.all('assignments').sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||'')));
+  const opts=assignments.map(a=>`<option value="${a.id}">${a.title}</option>`).join('');
+  document.getElementById('qAssignment').innerHTML=opts;
+  document.getElementById('previewAssignment').innerHTML=opts;
+  document.getElementById('previewAssignment').value=createdAid;
+  renderAssignments(); loadQuestions();
+  // 重置回第1步
+  parsedQuestions=[];hwFile=null;createdAid=null;
+  document.getElementById('aTitle').value='';
+  document.getElementById('hwImage').value='';
+  document.getElementById('aiPreview').style.display='none';
+  document.getElementById('uploadHint').textContent='点击选择作业题照片（可拍照）';
+  document.getElementById('aiMsg').textContent='';
+  document.getElementById('reviewArea').innerHTML='';
+  gotoStep(1);
+  toast('作业布置成功，学生端已可见','ok');
+}
+
+async function createQuestion(){
+  const d={assignment_id:parseInt(document.getElementById('qAssignment').value),
+    q_type:document.getElementById('qType').value,
+    question_text:document.getElementById('qText').value.trim(),
+    standard_answer:document.getElementById('qAnswer').value.trim(),
+    knowledge_point:document.getElementById('qKp').value,
+    score:parseFloat(document.getElementById('qScore').value),
+    analysis:document.getElementById('qAnalysis').value.trim(),sort_order:0};
+  if(!d.question_text||!d.standard_answer)return toast('请填题目内容和标准答案','err');
+  Store.insert('questions',{assignment_id:d.assignment_id,q_type:d.q_type,question_text:d.question_text,
+    standard_answer:d.standard_answer,knowledge_point:d.knowledge_point,score:d.score,
+    analysis:d.analysis,sort_order:0,grading_mode:'score',source:'manual'});
+  document.getElementById('qMsg').textContent='✓ 题目添加成功';toast('题目添加成功','ok');
+  document.getElementById('qText').value='';document.getElementById('qAnswer').value='';
+  assignments=Store.all('assignments').sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||'')));
+  const opts=assignments.map(a=>`<option value="${a.id}">${a.title}</option>`).join('');
+  document.getElementById('qAssignment').innerHTML=opts;document.getElementById('previewAssignment').innerHTML=opts;
+  renderAssignments();loadQuestions();
+}
+async function loadQuestions(){
+  const aid=document.getElementById('previewAssignment').value;if(!aid)return;
+  const qs=Store.where('questions',q=>q.assignment_id===Number(aid)).sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
+  document.getElementById('questionList').innerHTML=qs.length?qs.map(q=>`
+    <div class="q-card"><div class="q-head"><span class="q-type">${q.q_type}</span><span class="q-kp">${q.knowledge_point}</span>
+      <span class="q-type">${q.grading_mode==='passfail'?'二元制':'赋分制'}</span>${q.source==='ai'?'<span class="badge-warn">AI</span>':''}</div>
+      <div class="q-text">${q.question_text}</div>
+      <div class="q-answer">标准答案：${q.standard_answer} · ${q.score}分</div>
+      ${q.analysis?`<div class="q-extra"><b>解析：</b>${q.analysis}</div>`:''}
+    </div>`).join(''):'<div class="empty"><svg class="icon"><use href="#i-book"/></svg><p>该作业暂无题目</p></div>';
+}
+init();
+</script>
+</body>
+</html>

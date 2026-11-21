@@ -1,0 +1,5 @@
+{
+  "api_key": "在这里填入你的硅基流动 API Key（sk-...）",
+  "base_url": "https://api.siliconflow.cn/v1",
+  "model": "Qwen/Qwen3-VL-8B-Instruct"
+}
