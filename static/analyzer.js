@@ -10,11 +10,89 @@
     _kgMap: null,
     _kg: null,
 
+    // 旧版教材知识点名 -> 2024 新版名称（兼容历史/演示数据）
+    _kpAlias: {
+      '3的倍数特征':'2、3、5的倍数特征与找因数',
+      '质数与合数':'质数、合数与分解质因数',
+      '倍数与因数':'2、3、5的倍数特征与找因数',
+      '三角形的面积':'平行四边形、三角形、梯形面积',
+      '平行四边形的面积':'平行四边形、三角形、梯形面积',
+      '梯形的面积':'平行四边形、三角形、梯形面积',
+      '组合图形的面积':'平行四边形、三角形、梯形面积',
+      '小数乘整数':'小数乘整数与小数乘小数',
+      '小数乘小数':'小数乘整数与小数乘小数',
+      '积的近似数':'小数的大小比较与近似数',
+      '用字母表示数量关系':'用字母表示数与数量关系',
+      '小数的再认识和加减法':'小数的意义、读写与性质',
+      '三角形的再认识':'三角形内角和与三边关系',
+      '小数乘法':'小数乘整数与小数乘小数',
+      '用字母表示(一)':'用字母表示数与数量关系',
+      '用字母表示（一）':'用字母表示数与数量关系',
+      '多边形的面积':'平行四边形、三角形、梯形面积',
+      '图形的位置与运动':'平移、旋转与轴对称的综合',
+      '图形的位置与运动(一)':'平移、旋转与轴对称的综合',
+      '可能性':'事件发生的可能性与公平性'
+    },
+
     _initKG: function(){
       if(this._kg) return;
-      this._kg = Store.kg();
+      this._kg = Store.kg() || { knowledge_points: [], core_competencies: {}, competency_domain: {} };
       this._kgMap = {};
-      (this._kg.knowledge_points || []).forEach(function(k){ Analyzer._kgMap[k.name] = k; });
+      (this._kg.knowledge_points || []).forEach(function(k){
+        // 同名知识点可能跨册出现，按 name 保留首个即可（用于素养映射）
+        if(!Analyzer._kgMap[k.name]) Analyzer._kgMap[k.name] = k;
+      });
+    },
+
+    // 解析知识点名：原名优先，其次按别名表映射到新版名称
+    resolveKp: function(name){
+      this._initKG();
+      if(!name) return null;
+      if(this._kgMap[name]) return this._kgMap[name];
+      var alias = this._kpAlias[name];
+      if(alias && this._kgMap[alias]) return this._kgMap[alias];
+      return null;
+    },
+
+    // 取某一册的知识点名集合（用于按当前教材出题/批改）
+    kpsOfGrade: function(grade, semester){
+      this._initKG();
+      var out = [];
+      (this._kg.knowledge_points || []).forEach(function(k){
+        if((!grade || k.grade === grade) && (!semester || k.semester === semester)) out.push(k);
+      });
+      return out;
+    },
+
+    // 把当前班级的作答记录按"教材册"维度归类，得到跨学段成长轨迹
+    growthTimeline: function(class_id){
+      var stus = Store.where('students', function(s){ return s.class_id === Number(class_id); });
+      var ids = {}; stus.forEach(function(s){ ids[s.id] = true; });
+      var recs = Store.where('learning_records', function(r){ return ids[r.student_id]; });
+      this._initKG();
+      var kgMap = this._kgMap;
+      var byBook = {};
+      recs.forEach(function(r){
+        var kp = Analyzer.resolveKp(r.knowledge_point) || {};
+        // 优先用作答时记录的册次，旧数据回退到知识图谱反查
+        var g = r.grade || kp.grade || '';
+        var sm = r.semester || kp.semester || '';
+        var key = (g || '未分册') + (sm ? ' ' + sm : '');
+        if(!byBook[key]) byBook[key] = { grade: g, semester: sm, total:0, correct:0, score:0 };
+        byBook[key].total++;
+        byBook[key].correct += r.correct ? 1 : 0;
+        byBook[key].score += (r.score||0);
+      });
+      var order = (Store.kg() && Store.kg().grades) || ['一年级','二年级','三年级','四年级','五年级','六年级'];
+      return Object.keys(byBook).map(function(k){
+        var v = byBook[k];
+        return { book:k, grade:v.grade, semester:v.semester, total:v.total, correct:v.correct,
+                 accuracy: v.total ? round(v.correct/v.total, 3) : 0 };
+      }).sort(function(a,b){
+        var ga = order.indexOf(a.grade), gb = order.indexOf(b.grade);
+        if(ga !== gb) return ga - gb;
+        return (a.semester === '上册' ? 0 : 1) - (b.semester === '上册' ? 0 : 1);
+      });
     },
 
     masteryByStudent: function(sid){
@@ -70,6 +148,12 @@
       }
       var threshold = opt.threshold!=null?opt.threshold:0.6;
       var minAttempts = opt.min_attempts!=null?opt.min_attempts:2;
+      // 可选：只保留当前年级学期教材范围内的知识点
+      if(opt.grade || opt.semester){
+        var allow = {};
+        this.kpsOfGrade(opt.grade, opt.semester).forEach(function(k){ allow[k.name] = true; });
+        items = items.filter(function(x){ return allow[x.knowledge_point]; });
+      }
       var weak = items.filter(function(x){ return x.accuracy<threshold && x.total>=minAttempts; });
       weak.sort(function(a,b){ return (a.accuracy-b.accuracy) || (b.total-a.total); });
       return weak;
@@ -82,7 +166,7 @@
       var domains = this._kg.competency_domain;
       var score = {}, hit = {}, evidence = {};
       weakList.forEach(function(wp){
-        var kp = kgMap[wp.knowledge_point];
+        var kp = Analyzer.resolveKp(wp.knowledge_point);
         if(!kp) return;
         var severity = 1 - wp.accuracy;
         (kp.competencies||[]).forEach(function(c){
@@ -202,7 +286,7 @@
       if(!weak.length) return [];
       var groups = {};
       weak.forEach(function(wp){
-        var kp = kgMap[wp.knowledge_point];
+        var kp = Analyzer.resolveKp(wp.knowledge_point);
         if(kp){ if(!groups[kp.domain]) groups[kp.domain]=[]; groups[kp.domain].push(wp); }
       });
       var self = this;
@@ -211,7 +295,7 @@
         var avg = round(pts.reduce(function(a,p){return a+p.accuracy;},0)/pts.length,3);
         var names = pts.map(function(p){return p.knowledge_point;});
         var comps = [];
-        pts.forEach(function(p){ var kp=kgMap[p.knowledge_point]; if(kp) (kp.competencies||[]).forEach(function(c){ if(comps.indexOf(c)<0) comps.push(c); }); });
+        pts.forEach(function(p){ var kp=Analyzer.resolveKp(p.knowledge_point); if(kp) (kp.competencies||[]).forEach(function(c){ if(comps.indexOf(c)<0) comps.push(c); }); });
         return { domain:domain, weak_count:pts.length, avg_accuracy:avg, points:names,
                  competencies:comps.sort(), title:domain+'专题突破',
                  suggestion:self._suggestion(domain, names) };

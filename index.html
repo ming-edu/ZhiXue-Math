@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="static/style.css">
 </head>
 <body>
-{# 全局 SVG 图标库（Lucide 风格，继承 currentColor），各页面 include 后用 <svg class="icon"><use href="#i-xxx"/></svg> 引用 #}
+<!-- 全局 SVG 图标库（Lucide 风格，继承 currentColor），各页面 include 后用 <svg class="icon"><use href="#i-xxx"/></svg> 引用 -->
 <svg xmlns="http://www.w3.org/2000/svg" style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true">
   <symbol id="i-logo" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></g></symbol>
   <symbol id="i-home" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9.5 21v-6h5v6"/></g></symbol>
@@ -62,12 +62,19 @@
 <div class="container">
   <section class="hero">
     <div class="eyebrow"><svg class="icon"><use href="#i-sparkles"/></svg>AI 驱动 · 精准学情诊断</div>
-    <h1>从一道错题，看见能力的短板</h1>
-    <p>拍照批改 → 错题解析 → 素养诊断 → 变式训练 → 专题突破，用数据读懂每一个学生的真实学情。</p>
+    <h1>让每一次练习，都成为成长的阶梯</h1>
+    <p>从拍照批改到错因诊断，从变式训练到素养提升——用长期积累的学情大数据，循证分析、正向引导，陪伴学生的认知一步步向前生长。</p>
+    <div class="book-picker">
+      <svg class="icon"><use href="#i-book"/></svg>
+      <label for="pickGrade">当前教材</label>
+      <select id="pickGrade" aria-label="选择年级"></select>
+      <select id="pickSemester" aria-label="选择册别"></select>
+      <span class="bp-tip">切换教材，下方知识板块与知识图谱同步更新</span>
+    </div>
     <div class="hero-stats">
-      <div class="hs"><b>36</b><span>知识点</span></div>
+      <div class="hs"><b id="heroKpCount">—</b><span>本册知识板块</span></div>
       <div class="hs"><b>11</b><span>核心素养维度</span></div>
-      <div class="hs"><b>2024</b><span>北师大新课标</span></div>
+      <div class="hs"><b>2024</b><span>北师大版新教材</span></div>
       <div class="hs"><b>2022</b><span>版课程标准</span></div>
     </div>
   </section>
@@ -106,14 +113,8 @@
     </div>
     <div class="info-card">
       <h3><svg class="icon"><use href="#i-layers"/></svg>知识图谱覆盖</h3>
-      <p>严格按北师大版 2024 新课标五上目录构建，共 <b>36 个知识点</b>，覆盖 11 个单元/板块：</p>
-      <div class="tag-list">
-        <span class="tag">小数的再认识和加减法</span><span class="tag">三角形的再认识</span>
-        <span class="tag">小数乘法</span><span class="tag">用字母表示(一)</span>
-        <span class="tag">多边形的面积</span><span class="tag">图形的位置与运动</span>
-        <span class="tag">倍数与因数</span><span class="tag">可能性</span>
-        <span class="tag">数学好玩</span><span class="tag">综合实践</span>
-      </div>
+      <p id="kgDesc">依据北师大版 2024 新教材目录构建：</p>
+      <div class="tag-list" id="kgUnits"></div>
       <h3 style="font-size:12.5px;margin-top:14px;display:flex;align-items:center;gap:8px;color:var(--ink-2)"><svg class="icon" style="color:var(--brand-2)"><use href="#i-target"/></svg>课标核心素养映射：</h3>
       <div class="compet-line">
         <span>数感</span><span>量感</span><span>符号意识</span><span>运算能力</span><span>几何直观</span>
@@ -140,6 +141,7 @@
   </div>
 </div>
 <div class="toast" id="toast"></div>
+<script src="static/data_bundle.js"></script>
 <script src="static/ai.js"></script>
 <script src="static/ai_settings.js"></script>
 <script src="static/store.js"></script>
@@ -158,7 +160,7 @@ function renderClasses(){
     return `<a href="dashboard.html?id=${c.id}" class="class-card">
       <div class="class-icon"><svg class="icon"><use href="#i-school"/></svg></div>
       <div class="class-name">${esc(c.name)}</div>
-      <div class="class-meta">${esc(c.grade||'')} · ${esc(c.semester||'')} <span class="dot"></span> ${cnt} 名学生 <span class="dot"></span> 班号 ${esc(c.class_code||'—')}</div>
+      <div class="class-meta">${esc(c.teacher_name||'老师')} <span class="dot"></span> ${esc(c.grade||'五年级')} ${esc(c.semester||'上册')} <span class="dot"></span> ${cnt} 名学生 <span class="dot"></span> 班号 ${esc(c.class_code||'—')}</div>
       <div class="class-enter">查看学情看板 <svg class="icon"><use href="#i-arrow-right"/></svg></div>
     </a>`;
   }).join('');
@@ -228,7 +230,41 @@ async function restoreDemo(){
   if(!confirm('恢复演示数据会覆盖当前所有内容，确定吗？'))return;
   await Store.restoreDemo();renderClasses();renderStatus();toast('已恢复演示数据','ok');
 }
-(async function(){await Store.init();renderClasses();renderStatus()})();
+// ---- 教材选择与知识图谱动态统计 ----
+function bookOfKG(){
+  const kg=Store.kg()||{};
+  return {grades:kg.grades||['一年级','二年级','三年级','四年级','五年级','六年级'],
+          semesters:kg.semesters||['上册','下册']};
+}
+function initBookPicker(){
+  const b=bookOfKG();
+  // 从已存的选择恢复，默认五年级上册
+  let saved={};
+  try{saved=JSON.parse(localStorage.getItem('zhixue_book')||'{}')}catch(e){}
+  const gEl=document.getElementById('pickGrade'), sEl=document.getElementById('pickSemester');
+  gEl.innerHTML=b.grades.map(g=>`<option value="${g}">${g}</option>`).join('');
+  sEl.innerHTML=b.semesters.map(s=>`<option value="${s}">${s}</option>`).join('');
+  const defG=b.grades.indexOf(saved.grade)>=0?saved.grade:'五年级';
+  const defS=b.semesters.indexOf(saved.semester)>=0?saved.semester:'上册';
+  gEl.value=defG; sEl.value=defS;
+  gEl.addEventListener('change',renderBookStats);
+  sEl.addEventListener('change',renderBookStats);
+  renderBookStats();
+}
+function renderBookStats(){
+  const g=document.getElementById('pickGrade').value;
+  const s=document.getElementById('pickSemester').value;
+  try{localStorage.setItem('zhixue_book',JSON.stringify({grade:g,semester:s}))}catch(e){}
+  const kg=Store.kg()||{};
+  const kps=(kg.knowledge_points||[]).filter(k=>k.grade===g&&k.semester===s);
+  const units=[]; kps.forEach(k=>{if(units.indexOf(k.unit)<0)units.push(k.unit)});
+  document.getElementById('heroKpCount').textContent=kps.length;
+  document.getElementById('kgDesc').innerHTML=`当前展示 <b>${esc(g)}${esc(s)}</b>（北师大版2024新教材），共 <b>${units.length} 个单元</b>，覆盖 <b>${kps.length} 个知识板块</b>：`;
+  document.getElementById('kgUnits').innerHTML=units.length
+    ? units.map(u=>`<span class="tag">${esc(u)}</span>`).join('')
+    : '<span class="tag" style="opacity:.7">该册暂无知识板块数据</span>';
+}
+(async function(){await Store.init();await Store.loadKG();renderClasses();renderStatus();initBookPicker()})();
 </script>
 </body>
 </html>

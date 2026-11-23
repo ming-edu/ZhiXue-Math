@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="static/style.css">
 </head>
 <body>
-{# 全局 SVG 图标库（Lucide 风格，继承 currentColor），各页面 include 后用 <svg class="icon"><use href="#i-xxx"/></svg> 引用 #}
+<!-- 全局 SVG 图标库（Lucide 风格，继承 currentColor），各页面 include 后用 <svg class="icon"><use href="#i-xxx"/></svg> 引用 -->
 <svg xmlns="http://www.w3.org/2000/svg" style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true">
   <symbol id="i-logo" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></g></symbol>
   <symbol id="i-home" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9.5 21v-6h5v6"/></g></symbol>
@@ -52,6 +52,7 @@
   <div class="logo"><span class="logo-mark"><svg class="icon"><use href="#i-logo"/></svg></span>智学数学</div>
   <nav>
     <a href="index.html"><svg class="icon"><use href="#i-home"/></svg>概览</a>
+    <a href="classes.html"><svg class="icon"><use href="#i-users"/></svg>班级管理</a>
     <a href="create.html" class="active"><svg class="icon"><use href="#i-clipboard"/></svg>布置作业</a>
     <a href="review.html"><svg class="icon"><use href="#i-check-circle"/></svg>批改中心</a>
     <a href="student.html"><svg class="icon"><use href="#i-users"/></svg>学生端</a>
@@ -81,7 +82,7 @@
         <p class="panel-sub">取好标题、选好班级，把作业题拍下来上传，AI 自动数题并解题。</p>
         <div class="form-group"><label>作业标题 <span class="req">*</span></label><input id="aTitle" placeholder="如：第五单元三角形面积练习"></div>
         <div class="form-row form-row-3">
-          <div class="form-group"><label>布置班级</label><select id="aClass"></select></div>
+          <div class="form-group"><label>布置班级</label><select id="aClass" onchange="refreshKps()"></select><div id="kpHint" style="font-size:12px;color:var(--muted);margin-top:5px"></div></div>
           <div class="form-group"><label>默认评分模式</label><select id="aDefaultMode" onchange="toggleDefaultMode()">
             <option value="score">赋分制（打分）</option>
             <option value="passfail">二元制（正确/错误）</option>
@@ -111,7 +112,7 @@
               <div class="form-group"><label>题型</label><select id="qType">
                 <option value="choice">选择题</option><option value="fill">填空题</option><option value="calc">计算题</option>
               </select></div>
-              <div class="form-group"><label>关联知识点</label><select id="qKp"></select></div>
+              <div class="form-group"><label>关联知识板块</label><select id="qKp"></select></div>
             </div>
             <div class="form-group"><label>题目内容</label><textarea id="qText" placeholder="输入题干..."></textarea></div>
             <div class="form-row">
@@ -171,12 +172,26 @@
   </div>
 </div>
 <div class="toast" id="toast"></div>
+<script src="static/data_bundle.js"></script>
 <script src="static/ai.js"></script>
 <script src="static/ai_settings.js"></script>
 <script src="static/store.js"></script>
 <script>
-let classes=[], kps=[], assignments=[], parsedQuestions=[], createdAid=null, hwFile=null, curStep=1;
+let classes=[], allKps=[], kps=[], assignments=[], parsedQuestions=[], createdAid=null, hwFile=null, curStep=1;
 function toast(m,t){const e=document.getElementById('toast');e.textContent=m;e.className='toast'+(t?' '+t:'');e.style.display='block';setTimeout(()=>e.style.display='none',2600)}
+
+// 按当前所选班级的年级学期取对应教材知识点；该册无数据则回退全量
+function refreshKps(){
+  const cls=classes.find(c=>c.id===Number(document.getElementById('aClass').value));
+  if(cls && cls.grade){
+    const sub=allKps.filter(k=>k.grade===cls.grade && k.semester===(cls.semester||'上册'));
+    kps=sub.length?sub:allKps;
+  }else kps=allKps;
+  const kpSel=document.getElementById('qKp');
+  if(kpSel)kpSel.innerHTML=kps.map(k=>`<option value="${k.name}">${k.unit} · ${k.name}</option>`).join('');
+  const tag=document.getElementById('kpHint');
+  if(tag && cls)tag.textContent=`当前教材：北师大版 ${cls.grade||'五年级'}${cls.semester||'上册'} · ${kps.length} 个知识板块`;
+}
 
 function gotoStep(n){
   // 校验：进第2/3步必须有识别好的题目
@@ -205,13 +220,13 @@ async function init(){
   await Store.init();
   const kg=await Store.loadKG();
   classes=Store.all('classes');
-  kps=kg.knowledge_points;
+  allKps=kg.knowledge_points;
   assignments=Store.all('assignments').sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||'')));
   document.getElementById('aClass').innerHTML=classes.map(c=>`<option value="${c.id}">${c.name}（${c.class_code||''}）</option>`).join('');
   const opts=assignments.map(a=>`<option value="${a.id}">${a.title}</option>`).join('');
   document.getElementById('qAssignment').innerHTML=opts;
   document.getElementById('previewAssignment').innerHTML=opts;
-  document.getElementById('qKp').innerHTML=kps.map(k=>`<option value="${k.name}">${k.unit} · ${k.name}</option>`).join('');
+  refreshKps();
   document.getElementById('hwImage').onchange=function(e){
     hwFile=e.target.files[0];
     if(hwFile){
@@ -287,7 +302,7 @@ function renderReview(){
         <div class="form-group mode-score"><label>分值</label><input id="rs_${i}" type="number" value="${q.score||10}" min="1"></div>
       </div>
       <div class="form-group"><label>解题思路</label><input id="ran_${i}" value="${esc(q.analysis)}"></div>
-      <div class="form-group"><label>知识点</label><select id="rk_${i}">${kpOpts}</select></div>
+      <div class="form-group"><label>知识板块</label><select id="rk_${i}">${kpOpts}</select></div>
     </div>`).join('');
   parsedQuestions.forEach((q,i)=>{
     const sel=document.getElementById(`rk_${i}`);

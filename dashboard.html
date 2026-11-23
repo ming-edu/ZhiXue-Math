@@ -9,7 +9,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
-{# 全局 SVG 图标库（Lucide 风格，继承 currentColor），各页面 include 后用 <svg class="icon"><use href="#i-xxx"/></svg> 引用 #}
+<!-- 全局 SVG 图标库（Lucide 风格，继承 currentColor），各页面 include 后用 <svg class="icon"><use href="#i-xxx"/></svg> 引用 -->
 <svg xmlns="http://www.w3.org/2000/svg" style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true">
   <symbol id="i-logo" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></g></symbol>
   <symbol id="i-home" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9.5 21v-6h5v6"/></g></symbol>
@@ -53,9 +53,10 @@
   <div class="logo"><span class="logo-mark"><svg class="icon"><use href="#i-logo"/></svg></span>智学数学</div>
   <nav>
     <a href="index.html"><svg class="icon"><use href="#i-home"/></svg>概览</a>
+    <a href="classes.html" class="active"><svg class="icon"><use href="#i-users"/></svg>班级管理</a>
     <a href="create.html"><svg class="icon"><use href="#i-clipboard"/></svg>布置作业</a>
     <a href="review.html"><svg class="icon"><use href="#i-check-circle"/></svg>批改中心</a>
-    <a href="student.html"><svg class="icon"><use href="#i-users"/></svg>学生端</a>
+    <a href="student.html"><svg class="icon"><use href="#i-graduation"/></svg>学生端</a>
   </nav>
 </div>
 <div class="container">
@@ -63,7 +64,7 @@
     <div>
       <a href="index.html" class="back-link"><svg class="icon"><use href="#i-chevron"/></svg>返回班级列表</a>
       <h1 id="clsTitle">学情看板</h1>
-      <p id="clsSub">北师大版2024 · 基于课标核心素养诊断</p>
+      <p id="clsSub">北师大版2024新教材 · 基于2022版课程标准核心素养诊断</p>
     </div>
     <div class="btn-group">
       <button class="btn btn-outline" onclick="genClassVariants()"><svg class="icon"><use href="#i-sparkles"/></svg>生成班级变式训练</button>
@@ -77,6 +78,7 @@
     <div class="tab active" onclick="switchTab(this,'tab-weak')"><svg class="icon"><use href="#i-trending"/></svg>薄弱知识点</div>
     <div class="tab" onclick="switchTab(this,'tab-comp')"><svg class="icon"><use href="#i-radar"/></svg>核心素养诊断</div>
     <div class="tab" onclick="switchTab(this,'tab-topics')"><svg class="icon"><use href="#i-target"/></svg>专题突破课程</div>
+    <div class="tab" onclick="switchTab(this,'tab-growth')"><svg class="icon"><use href="#i-sparkles"/></svg>成长轨迹</div>
     <div class="tab" onclick="switchTab(this,'tab-ranking')"><svg class="icon"><use href="#i-users"/></svg>学生学情</div>
   </div>
 
@@ -112,6 +114,14 @@
     </div>
   </div>
 
+  <div id="tab-growth" class="tab-content">
+    <div class="panel">
+      <h2><svg class="icon"><use href="#i-sparkles"/></svg>跨学段成长轨迹</h2>
+      <p class="panel-sub">同一批学生从一年级到六年级的作答记录按教材册次累积，切换年级不会丢失历史数据。核心素养 11 项全学段一致，可纵向对比成长。</p>
+      <div id="growthList"></div>
+    </div>
+  </div>
+
   <div id="tab-ranking" class="tab-content">
     <div class="panel">
       <h2><svg class="icon"><use href="#i-users"/></svg>学生学情列表</h2>
@@ -135,6 +145,7 @@
 </div>
 <div class="toast" id="toast"></div>
 
+<script src="static/data_bundle.js"></script>
 <script src="static/ai.js"></script>
 <script src="static/ai_settings.js"></script>
 <script src="static/store.js"></script>
@@ -160,7 +171,7 @@ function accColor(a){return a<0.6?'var(--red)':a<0.8?'var(--orange)':'var(--gree
 async function refreshAll(){
   const cls = Store.get('classes', CID) || {name:'班级',grade:'',semester:''};
   document.getElementById('clsTitle').textContent = cls.name + ' · 学情看板';
-  document.getElementById('clsSub').textContent = (cls.grade||'')+' '+(cls.semester||'')+' · 北师大版2024 · 基于课标核心素养诊断';
+  document.getElementById('clsSub').textContent = (cls.teacher_name?cls.teacher_name+' · ':'')+(cls.grade||'五年级')+' '+(cls.semester||'上册')+' · 北师大版2024新教材 · 基于2022版课程标准核心素养诊断';
   const kpData = await Store.loadKG();
   kpData.knowledge_points.forEach(k=>kgMeta[k.name]=k);
   const ov = Store.classOverview(CID);
@@ -183,9 +194,10 @@ async function refreshAll(){
   document.getElementById('weakList').innerHTML = an.weak_points.length
     ? an.weak_points.slice(0,6).map(w=>{
         const m=kpMeta[w.knowledge_point]||{};
+        const book=(m.grade?m.grade+(m.semester?'·'+m.semester:''):'') ;
         return `<div class="point-card">
           <div class="name">${w.knowledge_point} <span class="pct">${(w.accuracy*100).toFixed(0)}%</span></div>
-          <div class="desc">${m.error_pattern||''} · 作答${w.total}次 · 涉及素养：${(m.competencies||[]).join('、')}</div>
+          <div class="desc">${book?book+' · ':''}${m.error_pattern||''} · 作答${w.total}次 · 涉及素养：${(m.competencies||[]).join('、')}</div>
         </div>`}).join('')
     : '<div class="empty"><svg class="icon"><use href="#i-check-circle"/></svg><p>暂无薄弱点数据，先布置作业并积累作答记录。</p></div>';
 
@@ -201,6 +213,20 @@ async function refreshAll(){
   renderCompList(an.competency);
   renderTopics(an.topics);
   renderRanking(ov.ranking);
+  renderGrowth(Analyzer.growthTimeline(CID));
+}
+
+function renderGrowth(items){
+  const el=document.getElementById('growthList');
+  if(!items.length){el.innerHTML='<div class="empty"><svg class="icon"><use href="#i-sparkles"/></svg><p>还没有作答记录。切换年级后继续布置作业，这里会逐步累积成长轨迹。</p></div>';return;}
+  el.innerHTML=items.map((g,i)=>{
+    const color=accColor(g.accuracy);
+    return `<div class="growth-item">
+      <div class="growth-book"><svg class="icon"><use href="#i-book"/></svg>${g.book}</div>
+      <div class="growth-bar"><div class="growth-fill" style="width:${g.accuracy*100}%;background:${color}"></div></div>
+      <div class="growth-meta">作答 ${g.total} 次 · 正确率 <b style="color:${color}">${(g.accuracy*100).toFixed(0)}%</b></div>
+    </div>`;
+  }).join('');
 }
 
 function renderRadar(data){

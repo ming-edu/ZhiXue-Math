@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="static/style.css">
 </head>
 <body>
-{# 全局 SVG 图标库（Lucide 风格，继承 currentColor），各页面 include 后用 <svg class="icon"><use href="#i-xxx"/></svg> 引用 #}
+<!-- 全局 SVG 图标库（Lucide 风格，继承 currentColor），各页面 include 后用 <svg class="icon"><use href="#i-xxx"/></svg> 引用 -->
 <svg xmlns="http://www.w3.org/2000/svg" style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true">
   <symbol id="i-logo" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></g></symbol>
   <symbol id="i-home" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9.5 21v-6h5v6"/></g></symbol>
@@ -52,9 +52,10 @@
   <div class="logo"><span class="logo-mark"><svg class="icon"><use href="#i-logo"/></svg></span>智学数学</div>
   <nav>
     <a href="index.html"><svg class="icon"><use href="#i-home"/></svg>概览</a>
+    <a href="classes.html"><svg class="icon"><use href="#i-users"/></svg>班级管理</a>
     <a href="create.html"><svg class="icon"><use href="#i-clipboard"/></svg>布置作业</a>
     <a href="review.html"><svg class="icon"><use href="#i-check-circle"/></svg>批改中心</a>
-    <a href="student.html" class="active"><svg class="icon"><use href="#i-users"/></svg>学生端</a>
+    <a href="student.html" class="active"><svg class="icon"><use href="#i-graduation"/></svg>学生端</a>
   </nav>
 </div>
 <div class="container">
@@ -133,12 +134,17 @@
   </div>
 </div>
 <div class="toast" id="toast"></div>
+<script src="static/data_bundle.js"></script>
 <script src="static/ai.js"></script>
 <script src="static/ai_settings.js"></script>
 <script src="static/store.js"></script>
 <script src="static/analyzer.js"></script>
 <script>
 let classes=[],students=[],questions=[];
+function currentBook(){
+  const cls=classes.find(c=>c.id===Number(document.getElementById('sClass').value));
+  return {grade:cls?(cls.grade||'五年级'):'', semester:cls?(cls.semester||'上册'):''};
+}
 function toast(m,t){const e=document.getElementById('toast');e.textContent=m;e.className='toast'+(t?' '+t:'');e.style.display='block';setTimeout(()=>e.style.display='none',2500)}
 function switchTab(el,id){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
@@ -194,7 +200,14 @@ async function gradePage(){
     grading_mode:q.grading_mode||'score',score:q.score||10}));
   try{
     if(!window.AI||!AI.hasKey()){ openAISettings(); throw new Error('请先填写你的 API Key（已打开设置窗口）'); }
-    const kps=(Store.kg()&&Store.kg().knowledge_points||[]).map(k=>k.name);
+    // 按当前班级的年级学期取对应教材知识点，让AI按册批改
+    const cls=classes.find(c=>c.id===Number(document.getElementById('sClass').value));
+    let bookKps=(Store.kg()&&Store.kg().knowledge_points||[]);
+    if(cls&&cls.grade){
+      const sub=bookKps.filter(k=>k.grade===cls.grade&&k.semester===(cls.semester||'上册'));
+      if(sub.length)bookKps=sub;
+    }
+    const kps=bookKps.map(k=>k.name);
     const raw=await AI.gradePage(file, payload, kps);
     // 组装成与原后端一致的 graded 结构
     const rmap={}; (raw.results||[]).forEach(x=>{ rmap[Number(x.no)]=x; });
@@ -206,13 +219,15 @@ async function gradePage(){
         full_score:q.score, knowledge_point:x.knowledge_point||q.knowledge_point };
     });
     const r={ graded: graded, image_path: null };
-    // 写入本地：提交记录 + 学习记录
+    // 写入本地：提交记录 + 学习记录（带当时册次，供跨学段成长追踪）
+    const book=currentBook();
     r.graded.forEach(g=>{
       const score=g.grading_mode==='passfail'?(g.is_correct?(g.full_score||10):0):(g.is_correct?(g.full_score||10):0);
       Store.insert('submissions',{question_id:g.question_id,student_id:Number(sid),image_path:r.image_path,
         ocr_text:'（AI直接读图批改）',student_answer:g.student_answer,answer_source:'ai_grade',
         score,is_correct:g.is_correct?1:0,needs_review:0,graded_at:new Date().toISOString()});
       Store.insert('learning_records',{student_id:Number(sid),knowledge_point:g.knowledge_point,
+        grade:book.grade,semester:book.semester,
         correct:g.is_correct?1:0,score,timestamp:new Date().toISOString()});
     });
     const right=r.graded.filter(g=>g.is_correct).length;
@@ -244,7 +259,9 @@ async function submitHomework(){
   Store.insert('submissions',{question_id:q.id,student_id:Number(sid),image_path:null,
     ocr_text:'',student_answer:answer,answer_source:'manual',score,
     is_correct:r.is_correct?1:0,needs_review:0,graded_at:new Date().toISOString()});
+  const book=currentBook();
   Store.insert('learning_records',{student_id:Number(sid),knowledge_point:q.knowledge_point,
+    grade:book.grade,semester:book.semester,
     correct:r.is_correct?1:0,score,timestamp:new Date().toISOString()});
   document.getElementById('uResult').innerHTML=`<div class="result-card ${r.is_correct?'ok':'no'}">
     <b>${r.is_correct?'✓ 回答正确！':'✗ 回答错误'}</b>

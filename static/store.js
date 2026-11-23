@@ -17,10 +17,12 @@
   function nowISO(){ return new Date().toISOString(); }
   function clone(o){ return JSON.parse(JSON.stringify(o)); }
 
+  var DATA_SCHEMA = 2;  // 数据结构版本；用于识别旧版残留的空壳数据
+
   function emptyState(){
     var tables = {};
     TABLES.forEach(function(t){ tables[t] = []; });
-    return { version: 1, initialized: true, demo: false, tables: tables };
+    return { version: 1, schema: DATA_SCHEMA, initialized: true, demo: false, tables: tables };
   }
 
   function load(){
@@ -30,6 +32,13 @@
         var s = JSON.parse(raw);
         if(s && s.tables){
           TABLES.forEach(function(t){ if(!s.tables[t]) s.tables[t] = []; });
+          // 旧版（无 schema 标记）在 file:// 下 fetch 失败会写入空壳数据，
+          // 这种残留会挡住演示数据注入。识别为「无标记且全空」则重新注入演示。
+          // 用户主动「清空重置」写入的空数据带 schema 标记，不会被误判。
+          if(s.schema !== DATA_SCHEMA){
+            var any = TABLES.some(function(t){ return (s.tables[t]||[]).length > 0; });
+            if(!any) return null;
+          }
           return s;
         }
       }
@@ -220,7 +229,18 @@
         state = existing;
         return Promise.resolve(state);
       }
-      // 首次访问或强制恢复演示数据：拉取静态 JSON
+      // 首次访问或强制恢复演示数据。
+      // 优先用内联数据（window.__DEMO_DATA__）：file:// 双击打开时 fetch 会被 CORS 拦截，
+      // 而 <script> 标签加载不受限制，保证静态版本地直接可用。
+      var inline = (typeof window !== 'undefined') ? window.__DEMO_DATA__ : null;
+      if(inline){
+        state = emptyState();
+        TABLES.forEach(function(t){ state.tables[t] = clone(inline[t] || []); });
+        state.demo = true;
+        persist();
+        return Promise.resolve(state);
+      }
+      // 兜底：网络环境用 fetch 拉取静态 JSON
       return fetch(DEMO_URL).then(function(r){ return r.json(); }).then(function(demo){
         state = emptyState();
         TABLES.forEach(function(t){ state.tables[t] = clone(demo[t] || []); });
@@ -295,12 +315,26 @@
     // ---- 班级与学生 ----
     genClassCode: genClassCode,
 
-    createClass: function(name, grade, semester){
+    createClass: function(name, teacherName, grade, semester){
       var code = genClassCode();
-      return this.insert('classes', {
-        name: name, grade: grade || '', semester: semester || '',
-        teacher_id: 1, class_code: code, created_at: nowISO()
+      var row = { name: name };
+      if(teacherName !== undefined) row.teacher_name = String(teacherName||'').trim();
+      row.grade = grade || '五年级';
+      row.semester = semester || '上册';
+      row.teacher_id = 1;
+      row.class_code = code;
+      row.created_at = nowISO();
+      return this.insert('classes', row);
+    },
+
+    // 更新班级的年级/学期/老师（切换教材不影响任何学生与历史数据）
+    setClassGrade: function(class_id, grade, semester){
+      return this.update('classes', Number(class_id), {
+        grade: grade || '五年级', semester: semester || '上册'
       });
+    },
+    setClassTeacher: function(class_id, teacherName){
+      return this.update('classes', Number(class_id), { teacher_name: String(teacherName||'').trim() });
     },
 
     // 批量导入学生：names 为字符串数组，去重、过滤空
@@ -334,6 +368,9 @@
     // ---- 知识图谱（只读公共数据）----
     loadKG: function(){
       if(kgCache) return Promise.resolve(kgCache);
+      // 优先用内联知识图谱（file:// 下 fetch 受限）
+      var inline = (typeof window !== 'undefined') ? window.__KG_DATA__ : null;
+      if(inline){ kgCache = inline; return Promise.resolve(inline); }
       return fetch(KG_URL).then(function(r){ return r.json(); }).then(function(d){ kgCache = d; return d; });
     },
     kg: function(){ return kgCache; },
@@ -405,7 +442,7 @@
       if(mode === 'merge'){
         state = mergeState(state || emptyState(), incoming);
       }else{
-        state = { version:1, initialized:true, demo: !!obj.is_demo, tables: incoming };
+        state = { version:1, schema: DATA_SCHEMA, initialized:true, demo: !!obj.is_demo, tables: incoming };
       }
       persist();
       return { mode: mode, stats: statsOf(state.tables) };

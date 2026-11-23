@@ -108,7 +108,18 @@ body{
 }
 .hero h1{font-size:clamp(26px,3.4vw,38px);font-weight:800;letter-spacing:-.8px;line-height:1.3;margin-bottom:12px}
 .hero p{font-size:14px;opacity:.86;max-width:620px;line-height:1.8}
-.hero-stats{display:flex;gap:34px;margin-top:28px;flex-wrap:wrap}
+.book-picker{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:18px}
+.book-picker>.icon{width:16px;height:16px;opacity:.9}
+.book-picker label{font-size:12px;font-weight:600;opacity:.9}
+.book-picker select{
+  appearance:none;-webkit-appearance:none;font-size:12.5px;font-weight:600;color:#4a3ab8;
+  background:rgba(255,255,255,.92) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235b4bd6' stroke-width='3'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 9px center;
+  border:1px solid rgba(255,255,255,.4);border-radius:9px;padding:6px 28px 6px 11px;cursor:pointer;
+  box-shadow:0 2px 8px rgba(30,20,90,.16);
+}
+.book-picker select:focus{outline:none;box-shadow:0 0 0 3px rgba(255,255,255,.35)}
+.book-picker .bp-tip{font-size:11px;opacity:.7;margin-left:2px}
+.hero-stats{display:flex;gap:34px;margin-top:24px;flex-wrap:wrap}
 .hero-stats .hs{display:flex;flex-direction:column;gap:2px}
 .hero-stats .hs b{font-size:24px;font-weight:800;letter-spacing:-.5px}
 .hero-stats .hs span{font-size:11.5px;opacity:.75;letter-spacing:.3px}
@@ -490,7 +501,20 @@ hr.divider{border:none;border-top:1px solid var(--line);margin:26px 0}
 .import-tip .icon{flex:none;width:15px;height:15px;color:var(--brand-2);margin-top:1px}
 #importMask .modal-foot{flex-wrap:wrap}
 
+/* 班级管理项的操作按钮对齐 */
+.manage-class .btn-sm{margin-left:auto;margin-right:10px;flex:none}
+/* 跨学段成长轨迹 */
+.growth-item{display:grid;grid-template-columns:150px 1fr 160px;align-items:center;gap:14px;padding:12px 4px;border-bottom:1px solid rgba(20,24,60,.06)}
+.growth-item:last-child{border-bottom:0}
+.growth-book{display:flex;align-items:center;gap:8px;font-weight:700;color:var(--ink);font-size:14px}
+.growth-book .icon{width:17px;height:17px;color:var(--brand-2);flex:none}
+.growth-bar{height:12px;background:rgba(20,24,60,.07);border-radius:8px;overflow:hidden}
+.growth-fill{height:100%;border-radius:8px;transition:width .4s}
+.growth-meta{font-size:12.5px;color:var(--muted);text-align:right}
+
 @media(max-width:980px){
+  .growth-item{grid-template-columns:1fr;gap:6px}
+  .growth-meta{text-align:left}
   .info-grid,.two-col,.form-row,.form-row-3,.stat-row{grid-template-columns:1fr}
   .hero{padding:36px 28px}
   .topbar{padding:0 16px}

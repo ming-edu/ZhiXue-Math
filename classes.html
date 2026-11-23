@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="static/style.css">
 </head>
 <body>
-{# 全局 SVG 图标库（Lucide 风格，继承 currentColor），各页面 include 后用 <svg class="icon"><use href="#i-xxx"/></svg> 引用 #}
+<!-- 全局 SVG 图标库（Lucide 风格，继承 currentColor），各页面 include 后用 <svg class="icon"><use href="#i-xxx"/></svg> 引用 -->
 <svg xmlns="http://www.w3.org/2000/svg" style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true">
   <symbol id="i-logo" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></g></symbol>
   <symbol id="i-home" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9.5 21v-6h5v6"/></g></symbol>
@@ -70,12 +70,9 @@
   <div class="two-col">
     <div class="panel">
       <h2><svg class="icon"><use href="#i-user-plus"/></svg>创建新班级</h2>
-      <p class="panel-sub">班号由系统随机生成，8 位、全局唯一，用于标识班级。</p>
+      <p class="panel-sub">班号由系统随机生成，8 位、全局唯一。年级/学期可在创建后到「班级设置」里选择或随时切换。</p>
       <div class="form-group"><label>班级名称 <span class="req">*</span></label><input id="cName" placeholder="如：五年级(3)班"></div>
-      <div class="form-row">
-        <div class="form-group"><label>年级</label><input id="cGrade" placeholder="如：五年级"></div>
-        <div class="form-group"><label>学期</label><select id="cSemester"><option>上册</option><option>下册</option></select></div>
-      </div>
+      <div class="form-group"><label>老师名称</label><input id="cTeacher" placeholder="如：王老师（可留空）"></div>
       <div class="form-group"><label>批量添加学生 <span style="color:var(--muted);font-weight:400">（一行一个姓名，可留空之后再加）</span></label>
         <textarea id="cStudents" rows="5" placeholder="张三&#10;李四&#10;王五"></textarea></div>
       <button class="btn btn-primary" onclick="createClass()"><svg class="icon"><use href="#i-plus"/></svg>创建班级</button>
@@ -100,7 +97,19 @@
     <div class="student-grid" id="studentGrid" style="margin-top:18px"></div>
   </div>
 </div>
+
+<!-- 班级设置弹窗 -->
+<div class="modal-mask" id="settingsMask">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h2><svg class="icon"><use href="#i-edit"/></svg>班级设置</h2>
+      <button class="modal-close" onclick="closeSettings()"><svg class="icon"><use href="#i-close"/></svg></button>
+    </div>
+    <div id="settingsBody"></div>
+  </div>
+</div>
 <div class="toast" id="toast"></div>
+<script src="static/data_bundle.js"></script>
 <script src="static/ai.js"></script>
 <script src="static/ai_settings.js"></script>
 <script src="static/store.js"></script>
@@ -114,10 +123,11 @@ function renderClasses(){
   const classes=Store.all('classes');
   document.getElementById('classList').innerHTML=classes.length?classes.map(c=>{
     const cnt=Store.where('students',s=>s.class_id===c.id).length;
-    return `<div class="manage-class" onclick="openClass(${c.id})">
-      <div class="mc-icon"><svg class="icon"><use href="#i-school"/></svg></div>
-      <div class="mc-body"><b>${esc(c.name)}</b><div class="mc-meta">${esc(c.grade||'')} ${esc(c.semester||'')} · ${cnt}人 · <span class="code-chip">${esc(c.class_code)}</span></div></div>
-      <svg class="icon mc-arrow"><use href="#i-arrow-right"/></svg>
+    return `<div class="manage-class">
+      <div class="mc-icon" onclick="openClass(${c.id})" style="cursor:pointer"><svg class="icon"><use href="#i-school"/></svg></div>
+      <div class="mc-body" onclick="openClass(${c.id})" style="cursor:pointer"><b>${esc(c.name)}</b><div class="mc-meta">${esc(c.teacher_name||'')}${c.teacher_name?' · ':''}${esc(c.grade||'默认五年级')} ${esc(c.semester||'上册')} · ${cnt}人 · <span class="code-chip">${esc(c.class_code)}</span></div></div>
+      <button class="btn btn-sm btn-outline" onclick="openSettings(${c.id})" title="班级设置"><svg class="icon"><use href="#i-edit"/></svg>设置</button>
+      <svg class="icon mc-arrow" onclick="openClass(${c.id})" style="cursor:pointer"><use href="#i-arrow-right"/></svg>
     </div>`;
   }).join(''):'<div class="empty"><svg class="icon"><use href="#i-school"/></svg><p>还没有班级，左边创建一个</p></div>';
 }
@@ -134,16 +144,55 @@ function openClass(cid){
   `).join(''):'<div class="empty"><p>本班还没有学生，在上方批量添加</p></div>';
   document.getElementById('studentPanel').scrollIntoView({behavior:'smooth',block:'nearest'});
 }
+let GRADES=['一年级','二年级','三年级','四年级','五年级','六年级'];
+let SEMESTERS=['上册','下册'];
+
 function createClass(){
   const name=document.getElementById('cName').value.trim();
   if(!name)return toast('请填写班级名称','err');
-  const c=Store.createClass(name,document.getElementById('cGrade').value.trim(),document.getElementById('cSemester').value);
+  const teacher=document.getElementById('cTeacher').value.trim();
+  // 新班默认五年级上册，年级/学期稍后在「班级设置」里选（演示默认与之一致）
+  const c=Store.createClass(name, teacher, '五年级', '上册');
   const names=parseNames(document.getElementById('cStudents').value);
   if(names.length)Store.addStudents(c.id,names);
-  toast(`已创建「${name}」，班号 ${c.class_code}${names.length?`，添加 ${names.length} 名学生`:''}`,'ok');
-  document.getElementById('cName').value='';document.getElementById('cStudents').value='';
+  toast(`已创建「${name}」，班号 ${c.class_code} · 可点「设置」选年级学期`,'ok');
+  document.getElementById('cName').value='';document.getElementById('cTeacher').value='';document.getElementById('cStudents').value='';
   renderClasses();openClass(c.id);
 }
+
+function openSettings(cid){
+  const c=Store.get('classes',cid);
+  if(!c)return;
+  const g=c.grade||'五年级', s=c.semester||'上册';
+  const gOpts=GRADES.map(x=>`<option ${x===g?'selected':''}>${x}</option>`).join('');
+  const sOpts=SEMESTERS.map(x=>`<option ${x===s?'selected':''}>${x}</option>`).join('');
+  document.getElementById('settingsBody').innerHTML=`
+    <div class="form-group"><label>班级名称</label><input id="setName" value="${esc(c.name)}"></div>
+    <div class="form-group"><label>老师名称</label><input id="setTeacher" value="${esc(c.teacher_name||'')}" placeholder="如：王老师"></div>
+    <div class="form-row">
+      <div class="form-group"><label>年级（教材）</label><select id="setGrade">${gOpts}</select></div>
+      <div class="form-group"><label>学期</label><select id="setSemester">${sOpts}</select></div>
+    </div>
+    <p class="panel-sub" style="color:var(--muted)">切换年级/学期只是切换教材与知识板块，学生和历史作答记录都会保留，可继续做跨学段成长分析。</p>
+    <div style="display:flex;gap:10px;margin-top:14px">
+      <button class="btn btn-primary" onclick="saveSettings(${cid})">保存设置</button>
+      <button class="btn" onclick="closeSettings()">取消</button>
+    </div>`;
+  document.getElementById('settingsMask').style.display='flex';
+}
+function closeSettings(){document.getElementById('settingsMask').style.display='none'}
+function saveSettings(cid){
+  const name=document.getElementById('setName').value.trim();
+  const teacher=document.getElementById('setTeacher').value.trim();
+  const grade=document.getElementById('setGrade').value;
+  const semester=document.getElementById('setSemester').value;
+  if(!name)return toast('班级名称不能为空','err');
+  Store.update('classes',cid,{name:name,teacher_name:teacher,grade:grade,semester:semester});
+  closeSettings();renderClasses();
+  if(currentCid===cid)openClass(cid);
+  toast(`已保存：${grade}${semester} · 北师大版`,'ok');
+}
+document.getElementById('settingsMask').addEventListener('click',e=>{if(e.target.id==='settingsMask')closeSettings()});
 function addStudents(){
   if(!currentCid)return;
   const names=parseNames(document.getElementById('addStudentsText').value);
@@ -165,7 +214,15 @@ function deleteClass(cid){
   currentCid=null;document.getElementById('studentPanel').style.display='none';
   renderClasses();toast('班级已删除','ok');
 }
-(async function(){await Store.init();renderClasses()})();
+(async function(){
+  await Store.init();
+  try{
+    const kg=await Store.loadKG();
+    if(kg.grades&&kg.grades.length)GRADES=kg.grades;
+    if(kg.semesters&&kg.semesters.length)SEMESTERS=kg.semesters;
+  }catch(e){}
+  renderClasses();
+})();
 </script>
 </body>
 </html>
