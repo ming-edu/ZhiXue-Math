@@ -8,8 +8,8 @@
   var KEY = 'zhixue_math_v1';
   var TABLES = ['teachers','classes','students','assignments','questions',
                 'submissions','learning_records','variant_assignments'];
-  var DEMO_URL = '/static/demo_data.json';
-  var KG_URL = '/static/kg.json';
+  var DEMO_URL = 'static/demo_data.json';
+  var KG_URL = 'static/kg.json';
 
   var state = null;   // { version, initialized, demo:bool, tables:{...} }
   var kgCache = null;
