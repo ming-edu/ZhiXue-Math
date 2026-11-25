@@ -8,7 +8,7 @@
   var KEY_STORAGE = 'zhixue_ai_key_v1';
   var CFG_STORAGE = 'zhixue_ai_cfg_v1';
   var DEFAULT_BASE = 'https://api.siliconflow.cn/v1';
-  var DEFAULT_MODEL = 'Qwen/Qwen3-VL-8B-Instruct';
+  var DEFAULT_MODEL = 'Qwen/Qwen2.5-VL-7B-Instruct';  // 硅基流动永久免费视觉模型，支持识图/OCR/数学题
 
   function getKey(){ try{ return (localStorage.getItem(KEY_STORAGE)||'').trim(); }catch(e){ return ''; } }
   function setKey(k){ try{ localStorage.setItem(KEY_STORAGE, String(k||'').trim()); return true; }catch(e){ return false; } }

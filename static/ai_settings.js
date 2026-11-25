@@ -64,16 +64,16 @@
       '<div class="ai-box">'+
         '<h3>'+iconSvg('key')+'AI 设置</h3>'+
         '<p class="sub">拍照识题和整页批改会调用 AI，需要你自己的硅基流动 API Key。<br>'+
-        'Key 只保存在你这台设备的浏览器里，不上传、不与他人共享；费用走你自己的账户（注册有免费额度）。'+
-        '规则判分不需要 Key。</p>'+
+        '默认使用<b>永久免费的视觉模型</b>（Qwen2.5-VL-7B），识图批改不花钱。<br>'+
+        'Key 只保存在你这台设备的浏览器里，不上传、不与他人共享。规则判分不需要 Key。</p>'+
         '<label>API Key（sk-...）</label>'+
         '<input id="aiKeyInput" type="password" placeholder="粘贴你的硅基流动 API Key" value="'+escapeAttr(curKey)+'">'+
         '<a href="javascript:void(0)" class="ai-btn link" onclick="document.getElementById(\'aiAdv\').classList.toggle(\'show\')">高级：接口地址 / 模型</a>'+
         '<div class="adv" id="aiAdv">'+
           '<label>接口地址 Base URL</label>'+
           '<input id="aiBaseInput" value="'+escapeAttr(cfg.base_url||'https://api.siliconflow.cn/v1')+'">'+
-          '<label>模型名</label>'+
-          '<input id="aiModelInput" value="'+escapeAttr(cfg.model||'Qwen/Qwen3-VL-8B-Instruct')+'">'+
+          '<label>模型名（默认免费视觉模型，可识别作业图片）</label>'+
+          '<input id="aiModelInput" value="'+escapeAttr(cfg.model||'Qwen/Qwen2.5-VL-7B-Instruct')+'">'+
         '</div>'+
         '<div class="row">'+
           '<button class="ai-btn primary" id="aiSaveBtn">保存</button>'+
@@ -96,7 +96,7 @@
       AI.setKey(k);
       AI.setCfg({
         base_url: document.getElementById('aiBaseInput').value.trim()||'https://api.siliconflow.cn/v1',
-        model: document.getElementById('aiModelInput').value.trim()||'Qwen/Qwen3-VL-8B-Instruct'
+        model: document.getElementById('aiModelInput').value.trim()||'Qwen/Qwen2.5-VL-7B-Instruct'
       });
       var dot=document.getElementById('aiDot');
       if(dot) dot.className='ai-status-dot '+(k?'on':'off');
